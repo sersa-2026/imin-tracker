@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iMin Price Tracker · SERSA</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#f4f5f7; --surface:#fff; --surface2:#eef0f5; --border:#d1d5db;
+  --accent:#ea6000; --accent2:#2563eb; --text:#111827; --text2:#1f2937;
+  --desc:#374151; --muted:#6b7280; --up:#dc2626; --down:#16a34a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh}
+
+header{background:#fff;border-bottom:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,.06);padding:12px 28px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100}
+.logo{font-size:13px;font-weight:800;letter-spacing:4px;color:var(--accent);text-transform:uppercase}
+.logo span{color:#9ca3af}
+header h1{font-size:14px;font-weight:600;color:var(--muted)}
+.period-pills{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 11px;font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);font-weight:500}
+.pill.base{background:#1e3a5f;border-color:#1e3a5f;color:#fff}
+.pill.latest{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* sync badge */
+.sync-badge{font-size:10px;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:12px;font-weight:600}
+.sync-ok{background:#d1fae5;color:#065f46}
+.sync-err{background:#fee2e2;color:#991b1b}
+.sync-loading{background:#e0f2fe;color:#0369a1}
+
+.layout{display:grid;grid-template-columns:320px 1fr;min-height:calc(100vh - 55px)}
+.sidebar{background:#fff;border-right:1px solid var(--border);padding:18px;display:flex;flex-direction:column;gap:16px;position:sticky;top:55px;height:calc(100vh - 55px);overflow-y:auto}
+.slabel{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+
+.dropzone{border:1.5px dashed #d1d5db;border-radius:10px;padding:20px 14px;text-align:center;cursor:pointer;transition:.2s;background:var(--surface2)}
+.dropzone:hover,.dropzone.over{border-color:var(--accent);background:rgba(234,96,0,.04)}
+.dz-icon{font-size:24px;margin-bottom:7px}
+.dz-title{font-size:13px;font-weight:600;margin-bottom:3px}
+.dz-sub{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+#fileInput{display:none}
+
+.form{display:flex;flex-direction:column;gap:8px}
+.flabel{font-size:11px;color:var(--muted);margin-bottom:2px;font-family:'DM Mono',monospace}
+input[type=text],input[type=password]{width:100%;background:#fff;border:1px solid var(--border);border-radius:7px;padding:9px 11px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;transition:.2s}
+input[type=text]:focus,input[type=password]:focus{border-color:var(--accent)}
+input::placeholder{color:#b0b7c3}
+
+.btn{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:10px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;width:100%;transition:.15s}
+.btn:hover{background:#cc5500;transform:translateY(-1px)}
+.btn:active{transform:none}
+.btn:disabled{background:#e5e7eb;color:#9ca3af;cursor:not-allowed;transform:none}
+.btn-ghost{background:#fff;border:1px solid var(--border);color:var(--text2)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);background:#fff}
+.btn-blue{background:#2563eb}
+.btn-blue:hover{background:#1d4ed8}
+.btn-danger{background:#fff;border:1px solid #fca5a5;color:#b91c1c}
+.btn-danger:hover{background:#fef2f2;border-color:#ef4444;color:#b91c1c}
+
+.fprev{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 11px;display:none;font-family:'DM Mono',monospace;font-size:11px}
+.fprev.show{display:block}
+.fname{color:var(--accent2);font-weight:500;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.finfo{color:var(--muted)}
+
+.status{border-radius:7px;padding:9px 11px;font-size:11px;font-family:'DM Mono',monospace;line-height:1.5;display:none}
+.status.show{display:block}
+.status.ok{background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);color:#15803d}
+.status.err{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.3);color:#b91c1c}
+.status.inf{background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.3);color:#1d4ed8}
+.status.warn{background:rgba(234,96,0,.08);border:1px solid rgba(234,96,0,.3);color:#92400e}
+
+.divider{border:none;border-top:1px solid var(--border)}
+.tip{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.8}
+.tip b{color:var(--text2)}
+
+/* URL config box */
+.url-box{background:#f8faff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px}
+.url-box .url-label{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#2563eb;margin-bottom:6px}
+.url-input{width:100%;background:#fff;border:1px solid #bfdbfe;border-radius:5px;padding:7px 9px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);outline:none}
+.url-input:focus{border-color:var(--accent2)}
+
+.content{display:flex;flex-direction:column;overflow:hidden}
+.stats{background:#fff;border-bottom:1px solid var(--border);padding:10px 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:1px}
+.sv{font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:var(--text)}
+.sv.orange{color:var(--accent)}
+.sl{font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.sdiv{width:1px;height:28px;background:var(--border)}
+
+.sbar{background:#fff;border-bottom:1px solid var(--border);padding:10px 24px}
+.swrap{position:relative;max-width:380px}
+.swrap input{padding-left:34px;background:var(--surface2)}
+.sicon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px}
+
+.tarea{overflow-x:auto;flex:1}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{background:#f1f3f7;padding:9px 13px;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#374151;border-bottom:2px solid #d1d5db;position:sticky;top:0;white-space:nowrap}
+thead th.ph{text-align:right;color:var(--accent2)}
+thead th.vh{text-align:center;color:#7c3aed}
+thead th.pl{border-left:2px solid #c4c9d4}
+tbody tr{border-bottom:1px solid #e9ecf1;transition:background .1s}
+tbody tr:hover{background:#f0f4ff}
+td{padding:8px 13px;vertical-align:middle;white-space:nowrap}
+td.sku{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;color:var(--accent2)}
+td.spu{font-size:11px;font-weight:600;color:var(--text2)}
+td.desc{font-size:11px;color:var(--desc);max-width:240px;overflow:hidden;text-overflow:ellipsis}
+td.pr{font-family:'DM Mono',monospace;font-size:12px;text-align:right;color:var(--text2)}
+td.pr.pl{border-left:2px solid #dde1ea}
+td.pr.nil{color:#d1d5db}
+td.vr{text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:600}
+.vu{color:var(--up)}.vd{color:var(--down)}.vm{color:var(--muted);font-weight:400}.vn{color:var(--accent);font-size:10px;font-weight:700;letter-spacing:.5px}
+
+.empty{text-align:center;padding:60px 24px;color:var(--muted);display:none}
+.empty-icon{font-size:36px;margin-bottom:10px}
+.empty h3{font-size:16px;font-weight:700;color:var(--text2);margin-bottom:4px}
+.empty p{font-size:11px;font-family:'DM Mono',monospace}
+
+/* loading overlay */
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.85);display:none;align-items:center;justify-content:center;z-index:300;flex-direction:column;gap:12px}
+.loading-overlay.show{display:flex}
+.spinner{width:36px;height:36px;border:3px solid #e5e7eb;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.loading-msg{font-size:13px;color:var(--muted);font-family:'DM Mono',monospace}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:200}
+.overlay.show{display:flex}
+.modal{background:#fff;border:1px solid var(--border);border-radius:14px;padding:26px;width:420px;max-width:94vw;box-shadow:0 8px 28px rgba(0,0,0,.12)}
+.modal h3{font-size:16px;font-weight:800;margin-bottom:6px}
+.modal p{font-size:12px;color:var(--muted);margin-bottom:18px;font-family:'DM Mono',monospace;line-height:1.6}
+.mbtns{display:flex;gap:8px}
+.mbtns .btn{flex:1}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+@keyframes fi{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+tbody tr{animation:fi .15s ease both}
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-msg" id="loadingMsg">Cargando datos desde Google Sheets…</div>
+</div>
+
+<header>
+  <div class="logo">iMin <span>·</span> LATAM</div>
+  <h1>Price Tracker</h1>
+  <span class="sync-badge sync-loading" id="syncBadge">⏳ Conectando…</span>
+  <div class="period-pills" id="pills"></div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- Apps Script URL -->
+    <div class="url-box">
+      <div class="url-label">🔗 Google Sheets API</div>
+      <input type="text" class="url-input" id="apiUrl"
+        placeholder="Pegar URL de Apps Script Web App…"
+        oninput="saveApiUrl()" />
+      <div style="font-size:10px;color:#6b7280;margin-top:6px;font-family:'DM Mono',monospace">
+        Se guarda en este navegador automáticamente
+      </div>
+    </div>
+
+    <div>
+      <div class="slabel">Cargar nueva lista</div>
+      <div class="dropzone" id="dz" onclick="document.getElementById('fileInput').click()">
+        <div class="dz-icon">📂</div>
+        <div class="dz-title">Soltar archivo aquí</div>
+        <div class="dz-sub">.xlsx · formato iMin</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFile(event)">
+    </div>
+
+    <div class="fprev" id="fprev">
+      <div class="fname" id="fname"></div>
+      <div class="finfo" id="finfo"></div>
+    </div>
+
+    <div class="form">
+      <div>
+        <div class="flabel">Período (ej: AGO-2026)</div>
+        <input type="text" id="pInput" placeholder="AGO-2026" maxlength="10">
+      </div>
+      <div>
+        <div class="flabel">Contraseña</div>
+        <input type="password" id="pwInput" placeholder="••••••••">
+      </div>
+      <button class="btn" id="addBtn" onclick="addPeriod()" disabled>
+        Agregar período → Sheets
+      </button>
+      <button class="btn btn-ghost" onclick="clearFile()">Limpiar selección</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <hr class="divider">
+
+    <div>
+      <div class="slabel">Exportar</div>
+      <button class="btn btn-blue" onclick="exportXLSX()" style="margin-bottom:8px">↓ Descargar Excel</button>
+      <button class="btn btn-ghost" onclick="reloadFromSheets()" style="margin-bottom:8px">↺ Recargar desde Sheets</button>
+    </div>
+
+    <hr class="divider">
+
+    <div style="margin-top:auto">
+      <div class="slabel" style="margin-bottom:6px">Cómo funciona</div>
+      <div class="tip">
+        <b>Datos en tiempo real:</b> todos ven lo mismo.<br><br>
+        <b>Agregar período:</b> requiere contraseña. Cargás el .xlsx de iMin, ponés el período y la contraseña, y los precios se guardan en Google Sheets automáticamente.<br><br>
+        <b>Ver precios:</b> basta con el link. Sin login.<br><br>
+        <b>URL de API:</b> copiá la URL de tu Apps Script Web App y pegala arriba. Se guarda en este navegador.
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <div class="stats" id="statsBar">
+      <div class="stat"><div class="sv orange" id="stProds">—</div><div class="sl">Productos</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="sv" id="stPers">—</div><div class="sl">Períodos</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="sv" id="stNew" style="color:var(--accent)">—</div><div class="sl">SKU nuevos</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="sv" id="stUp" style="color:var(--up)">—</div><div class="sl">Subas</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="sv" id="stDown" style="color:var(--down)">—</div><div class="sl">Bajas</div></div>
+    </div>
+
+    <div class="sbar">
+      <div class="swrap">
+        <span class="sicon">🔍</span>
+        <input type="text" id="search" placeholder="Buscar SKU, SPU o descripción…" oninput="renderTable()">
+      </div>
+    </div>
+
+    <div class="tarea">
+      <table id="tbl">
+        <thead id="thead"></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty">
+        <div class="empty-icon">🔎</div>
+        <h3>Sin resultados</h3>
+        <p>Probá con otra búsqueda</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="overlay" id="confirmModal">
+  <div class="modal">
+    <h3 id="modalTitle">Confirmar</h3>
+    <p id="modalBody"></p>
+    <div class="mbtns">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn" id="modalOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const API_URL_KEY  = 'imin_api_url';
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbyeAN7jegu0P8MmgsVbq6LySID8cSjBZyslTrvfVjYQ87gKfyWDTdV81lu01PCksw3b/exec';
+const LOCAL_KEY    = 'imin_tracker_cache';
+const PRICE_COLS   = ['Premier_Legacy','New_Premier','VAR_Price'];
+
+// ─── BASE DATA (MAY-2026 fallback si Sheets no responde) ─────────────────────
+const BASE_PRODUCTS = [{"sku":"DS311A004","spu":"Swan 3","desc":"iMin\\Swan 3\\Android 15\\8-Core, 2.0GHz\\15.6\"\\WiFi 6\\BT\\GMS\\Gray\\8GB+128GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":710.67,"VAR_Price":808.69},"_jan":{"Premier_Legacy":null,"New_Premier":638.4,"VAR_Price":729.6}},{"sku":"DS312A002","spu":"Swan 3","desc":"iMin\\Swan 3\\Android 15\\8-Core, 2.0GHz\\15.6\"+10.1\"\\WiFi 6\\BT\\NFC\\GMS\\Gray\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":728.0,"VAR_Price":828.41},"_jan":{"Premier_Legacy":null,"New_Premier":638.4,"VAR_Price":729.6}},{"sku":"SH111A005","spu":"Heron 1 mini","desc":"iMin\\Heron 1 mini\\Android 15\\8-Core, 2.0GHz\\15.6\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Standard Scanner\\GMS\\Black\\8GB+128GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":1005.33,"VAR_Price":1127.19},"_jan":{"Premier_Legacy":null,"New_Premier":974.4,"VAR_Price":1113.6}},{"sku":"SH111A011","spu":"Heron 1 mini","desc":"iMin\\Heron 1 mini (Retail Edition)\\Android 15\\8-Core, 2.0GHz\\15.6\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Retail Scanner\\GMS\\Black\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":1005.33,"VAR_Price":1127.19},"_jan":{"Premier_Legacy":null,"New_Premier":974.4,"VAR_Price":1113.6}},{"sku":"SH111A014","spu":"Heron 1 mini","desc":"iMin\\Heron 1 mini (Retail Edition)\\Android 15\\8-Core, 2.0GHz\\15.6\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Retail Scanner\\GMS\\Black\\8GB+128GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":1178.67,"VAR_Price":1321.54},"_jan":{"Premier_Legacy":null,"New_Premier":1142.4,"VAR_Price":1305.6}},{"sku":"SH112A005","spu":"Heron 1","desc":"iMin\\Heron 1\\Android 15\\8-Core, 2.0GHz\\23.8\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Standard Scanner\\GMS\\Black\\8GB+128GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":1300.0,"VAR_Price":1457.58},"_jan":{"Premier_Legacy":null,"New_Premier":1260.0,"VAR_Price":1440.0}},{"sku":"SH112A011","spu":"Heron 1","desc":"iMin\\Heron 1 (Retail Edition)\\Android 15\\8-Core, 2.0GHz\\23.8\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Retail Scanner\\GMS\\Black\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":1300.0,"VAR_Price":1457.58},"_jan":{"Premier_Legacy":null,"New_Premier":1260.0,"VAR_Price":1440.0}},{"sku":"SH112A014","spu":"Heron 1","desc":"iMin\\Heron 1 (Retail Edition)\\Android 15\\8-Core, 2.0GHz\\23.8\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Retail Scanner\\GMS\\Black\\8GB+128GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":1473.33,"VAR_Price":1651.92},"_jan":{"Premier_Legacy":null,"New_Premier":1428.0,"VAR_Price":1632.0}},{"sku":"AP04AA004","spu":"80mm Thermal Printer","desc":"iMin\\80mm Thermal Printer\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":164.67,"VAR_Price":188.19},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"SC111A001","spu":"Crane 1 16\"","desc":"iMin\\Crane 1 16\"\\Android 13\\8-Core 2.2GHz\\16\" FHD\\WiFi6\\BT\\Auto-boot\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":459.8,"New_Premier":null,"VAR_Price":676.96},"_jan":{"Premier_Legacy":400.0,"New_Premier":null,"VAR_Price":616.0}},{"sku":"SC111A006","spu":"Crane 1 16\"","desc":"iMin\\Crane 1 16\"\\Android 13\\8-Core 2.2GHz\\16\" FHD\\WiFi6\\BT\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":459.8,"New_Premier":null,"VAR_Price":676.96},"_jan":{"Premier_Legacy":400.0,"New_Premier":null,"VAR_Price":616.0}},{"sku":"SC111A007","spu":"Crane 1 16\"","desc":"iMin\\Crane 1 16\"\\Android 13\\8-Core 2.2GHz\\16\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":459.8,"New_Premier":null,"VAR_Price":676.96},"_jan":{"Premier_Legacy":400.0,"New_Premier":null,"VAR_Price":616.0}},{"sku":"SC111A010","spu":"Crane 1 16\"","desc":"iMin\\Crane 1 16\"\\Android 13\\8-Core 2.2GHz\\16\" FHD\\WiFi6\\BT\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":632.5,"New_Premier":null,"VAR_Price":931.23},"_jan":{"Premier_Legacy":400.0,"New_Premier":null,"VAR_Price":616.0}},{"sku":"SC111A011","spu":"Crane 1 16\"","desc":"iMin\\Crane 1 16\"\\Android 13\\8-Core 2.2GHz\\16\" FHD\\WiFi6\\BT\\Auto-boot\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":632.5,"New_Premier":null,"VAR_Price":931.23},"_jan":{"Premier_Legacy":400.0,"New_Premier":null,"VAR_Price":616.0}},{"sku":"SC111A015","spu":"Crane 1 16\"","desc":"iMin\\Crane 1 16\"\\Android 13\\8-Core 2.2GHz\\16\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":632.5,"New_Premier":null,"VAR_Price":931.23},"_jan":{"Premier_Legacy":400.0,"New_Premier":null,"VAR_Price":616.0}},{"sku":"SC112A002","spu":"Crane 1 21.5\"","desc":"iMin\\Crane 1 21.5\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\Auto-boot\\4GB+64GB\\Black\\IT PLUG L","MAY-2026":{"Premier_Legacy":556.6,"New_Premier":null,"VAR_Price":819.48},"_jan":{"Premier_Legacy":495.0,"New_Premier":null,"VAR_Price":756.8}},{"sku":"SC112A003","spu":"Crane 1 21.5\"","desc":"iMin\\Crane 1 21.5\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\Auto-boot\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":556.6,"New_Premier":null,"VAR_Price":819.48},"_jan":{"Premier_Legacy":495.0,"New_Premier":null,"VAR_Price":756.8}},{"sku":"SC112A006","spu":"Crane 1 21.5\"","desc":"iMin\\Crane 1 21.5\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":556.6,"New_Premier":null,"VAR_Price":819.48},"_jan":{"Premier_Legacy":495.0,"New_Premier":null,"VAR_Price":756.8}},{"sku":"SC112A009","spu":"Crane 1 21.5\"","desc":"iMin\\Crane 1 21.5\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":556.6,"New_Premier":null,"VAR_Price":819.48},"_jan":{"Premier_Legacy":495.0,"New_Premier":null,"VAR_Price":756.8}},{"sku":"SC112A011","spu":"Crane 1 21.5\"","desc":"iMin\\Crane 1 21.5\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\4GB+64GB\\Black\\IT PLUG L","MAY-2026":{"Premier_Legacy":556.6,"New_Premier":null,"VAR_Price":819.48},"_jan":{"Premier_Legacy":495.0,"New_Premier":null,"VAR_Price":756.8}},{"sku":"SC112A013","spu":"Crane 1 21.5\"","desc":"iMin\\Crane 1 21.5\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\Auto-boot\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":701.8,"New_Premier":null,"VAR_Price":1033.26},"_jan":{"Premier_Legacy":495.0,"New_Premier":null,"VAR_Price":756.8}},{"sku":"SC112A016","spu":"Crane 1 21.5\"","desc":"iMin\\Crane 1 21.5\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":701.8,"New_Premier":null,"VAR_Price":1033.26},"_jan":{"Premier_Legacy":495.0,"New_Premier":null,"VAR_Price":756.8}},{"sku":"SC112A019","spu":"Crane 1 21.5\"","desc":"iMin\\Crane 1 21.5\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\4GB+64GB\\Black\\ARG PLUG I","MAY-2026":{"Premier_Legacy":556.6,"New_Premier":null,"VAR_Price":819.48},"_jan":{"Premier_Legacy":495.0,"New_Premier":null,"VAR_Price":756.8}},{"sku":"SC113A003","spu":"Crane 1 27\"","desc":"iMin\\Crane 1 27\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":653.4,"New_Premier":null,"VAR_Price":962.0},"_jan":{"Premier_Legacy":585.0,"New_Premier":null,"VAR_Price":897.6}},{"sku":"SC113A004","spu":"Crane 1 27\"","desc":"iMin\\Crane 1 27\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":653.4,"New_Premier":null,"VAR_Price":962.0},"_jan":{"Premier_Legacy":585.0,"New_Premier":null,"VAR_Price":897.6}},{"sku":"SC113A005","spu":"Crane 1 27\"","desc":"iMin\\Crane 1 27\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":653.4,"New_Premier":null,"VAR_Price":962.0},"_jan":{"Premier_Legacy":585.0,"New_Premier":null,"VAR_Price":897.6}},{"sku":"SC113A007","spu":"Crane 1 27\"","desc":"iMin\\Crane 1 27\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\4GB+64GB\\Black\\IT PLUG L","MAY-2026":{"Premier_Legacy":653.4,"New_Premier":null,"VAR_Price":962.0},"_jan":{"Premier_Legacy":585.0,"New_Premier":null,"VAR_Price":897.6}},{"sku":"SC113A010","spu":"Crane 1 27\"","desc":"iMin\\Crane 1 27\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\Auto-boot\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":653.4,"New_Premier":null,"VAR_Price":962.0},"_jan":{"Premier_Legacy":585.0,"New_Premier":null,"VAR_Price":897.6}},{"sku":"SC113A013","spu":"Crane 1 27\"","desc":"iMin\\Crane 1 27\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":798.6,"New_Premier":null,"VAR_Price":1175.78},"_jan":{"Premier_Legacy":585.0,"New_Premier":null,"VAR_Price":897.6}},{"sku":"SC113A017","spu":"Crane 1 27\"","desc":"iMin\\Crane 1 27\"\\Android 13\\8-Core 2.2GHz\\21.5\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\4GB+64GB\\Black\\ARG PLUG I","MAY-2026":{"Premier_Legacy":556.6,"New_Premier":null,"VAR_Price":819.48},"_jan":{"Premier_Legacy":585.0,"New_Premier":null,"VAR_Price":897.6}},{"sku":"SC113A019","spu":"Crane 1 27\"","desc":"iMin\\Crane 1 27\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\Auto-boot\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":653.4,"New_Premier":null,"VAR_Price":962.0},"_jan":{"Premier_Legacy":585.0,"New_Premier":null,"VAR_Price":897.6}},{"sku":"SC114A002","spu":"Crane 1 32\"","desc":"iMin\\Crane 1 32\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":750.2,"New_Premier":null,"VAR_Price":1104.52},"_jan":{"Premier_Legacy":670.0,"New_Premier":null,"VAR_Price":1038.4}},{"sku":"SC114A007","spu":"Crane 1 32\"","desc":"iMin\\Crane 1 32\"\\Android 13\\8-Core 2.2GHz\\32\" FHD\\WiFi6\\BT\\Auto-boot\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":895.4,"New_Premier":null,"VAR_Price":1318.3},"_jan":{"Premier_Legacy":670.0,"New_Premier":null,"VAR_Price":1038.4}},{"sku":"SC114A011","spu":"Crane 1 32\"","desc":"iMin\\Crane 1 32\"\\Android 13\\8-Core 2.2GHz\\32\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":895.4,"New_Premier":null,"VAR_Price":1318.3},"_jan":{"Premier_Legacy":670.0,"New_Premier":null,"VAR_Price":1038.4}},{"sku":"SC114A014","spu":"Crane 1 32\"","desc":"iMin\\Crane 1 32\"\\Android 13\\8-Core 2.2GHz\\27\" FHD\\WiFi6\\BT\\Auto-boot\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":750.2,"New_Premier":null,"VAR_Price":1104.52},"_jan":{"Premier_Legacy":670.0,"New_Premier":null,"VAR_Price":1038.4}},{"sku":"SC131A001","spu":"Crane 1 Display 16\"","desc":"iMin\\Crane 1 Display 16\"\\FHD\\TP\\Black\\1.8m cable","MAY-2026":{"Premier_Legacy":169.4,"New_Premier":null,"VAR_Price":254.22},"_jan":{"Premier_Legacy":165.0,"New_Premier":null,"VAR_Price":246.4}},{"sku":"SC128A002","spu":"Crane 1 Module Holder","desc":"iMin\\Crane Module Holder\\Black\\Support AP-03 series","MAY-2026":{"Premier_Legacy":null,"New_Premier":23.83,"VAR_Price":27.24},"_jan":{"Premier_Legacy":18.0,"New_Premier":null,"VAR_Price":26.4}},{"sku":"SC144A001","spu":"Crane 1 NFC","desc":"iMin\\Crane 1 NFC\\Pogopin Module\\Black","MAY-2026":{"Premier_Legacy":24.2,"New_Premier":null,"VAR_Price":36.32},"_jan":{"Premier_Legacy":24.0,"New_Premier":null,"VAR_Price":35.2}},{"sku":"SC144A002","spu":"Crane 1 NFC","desc":"iMin\\Crane 1 NFC\\Pogopin Module\\Black\\Unbranded","MAY-2026":{"Premier_Legacy":24.2,"New_Premier":null,"VAR_Price":36.32},"_jan":{"Premier_Legacy":24.0,"New_Premier":null,"VAR_Price":35.2}},{"sku":"SC126A001","spu":"Crane 1 POS Holder","desc":"iMin\\POS Holder\\For Crane series\\Gray","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":18.0,"New_Premier":null,"VAR_Price":26.4}},{"sku":"SC126A002","spu":"Crane 1 POS Holder","desc":"iMin\\POS Holder\\For Crane series\\Unbranded\\Gray","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":18.0,"New_Premier":null,"VAR_Price":26.4}},{"sku":"SC141A001","spu":"Crane 1 Scanner","desc":"iMin\\Crane 1 Scanner\\Pogopin Module\\Black","MAY-2026":{"Premier_Legacy":48.4,"New_Premier":null,"VAR_Price":72.63},"_jan":{"Premier_Legacy":47.0,"New_Premier":null,"VAR_Price":70.4}},{"sku":"SC141A002","spu":"Crane 1 Scanner","desc":"iMin\\Crane 1 Scanner\\Pogopin Module\\Black\\Unbranded","MAY-2026":{"Premier_Legacy":48.4,"New_Premier":null,"VAR_Price":72.63},"_jan":{"Premier_Legacy":47.0,"New_Premier":null,"VAR_Price":70.4}},{"sku":"AP02AA001","spu":"Desktop Stand","desc":"iMin\\Desktop stand\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":260.0,"VAR_Price":297.14},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"TF111A003","spu":"Falcon 1","desc":"iMin\\Falcon 1\\Android 11\\10.1\"\\Secondary 2.4\"\\8-Core 2.0GHz\\0.3MP Camera\\80mm Printer\\WiFi\\LTE\\BT\\GNSS\\2GB+16GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":290.4,"New_Premier":null,"VAR_Price":440.0},"_jan":{"Premier_Legacy":252.0,"New_Premier":null,"VAR_Price":396.88}},{"sku":"TF111A009","spu":"Falcon 1","desc":"iMin\\Falcon 1\\Android 11\\10.1\"\\Secondary 2.4\"\\8-Core 2.0GHz\\0.3MP Camera\\80mm Printer\\WiFi\\LTE\\BT\\GNSS\\NFC\\4GB+32GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":363.0,"New_Premier":null,"VAR_Price":550.0},"_jan":{"Premier_Legacy":252.0,"New_Premier":null,"VAR_Price":396.88}},{"sku":"TF111A011","spu":"Falcon 1","desc":"iMin\\Falcon 1\\Android 11\\10.1\"\\Secondary 2.4\"\\8-Core 2.0GHz\\0.3MP Camera\\80mm Printer\\WiFi\\LTE\\BT\\GNSS\\NFC\\4GB+32GB\\Black\\PC80\\IT PLUG L","MAY-2026":{"Premier_Legacy":363.0,"New_Premier":null,"VAR_Price":550.0},"_jan":{"Premier_Legacy":252.0,"New_Premier":null,"VAR_Price":396.88}},{"sku":"TF111A014","spu":"Falcon 1","desc":"iMin\\Falcon 1\\Android 11\\10.1\"\\Secondary 2.4\"\\8-Core 2.0GHz\\0.3MP Camera\\80mm Printer\\WiFi\\LTE\\BT\\GNSS\\2GB+16GB\\Black\\ARG PLUG I","MAY-2026":{"Premier_Legacy":290.4,"New_Premier":null,"VAR_Price":440.0},"_jan":{"Premier_Legacy":252.0,"New_Premier":null,"VAR_Price":396.88}},{"sku":"TF111A015","spu":"Falcon 1","desc":"iMin\\Falcon 1\\Android 11\\10.1\"\\Secondary 2.4\"\\8-Core 2.0GHz\\0.3MP Camera\\80mm Printer\\WiFi\\LTE\\BT\\GNSS\\2GB+16GB\\Black\\TAIWAN大当家定制\\US PLUG B","MAY-2026":{"Premier_Legacy":290.4,"New_Premier":null,"VAR_Price":440.0},"_jan":{"Premier_Legacy":252.0,"New_Premier":null,"VAR_Price":396.88}},{"sku":"TF112A004","spu":"Falcon 1 Pro","desc":"iMin\\Falcon 1 Pro\\Android 15\\8-Core, 2.0GHz\\10.95\"\\3.97\" Secondary Display \\WiFi 6\\BT\\GMS\\Black\\4GB+64GB\\NFC\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":537.33,"VAR_Price":620.0},"_jan":{"Premier_Legacy":null,"New_Premier":521.0,"VAR_Price":595.0}},{"sku":"TF211A003","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\4GB+64GB\\GMS\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":254.1,"New_Premier":null,"VAR_Price":385.0},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF211A004","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\4GB+64GB\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":254.1,"New_Premier":null,"VAR_Price":385.0},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF211A005","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\4GB+64GB\\GMS\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":254.1,"New_Premier":null,"VAR_Price":385.0},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF211A006","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\4GB+64GB\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":254.1,"New_Premier":null,"VAR_Price":385.0},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF211A011","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\8GB+128GB\\GMS\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":350.9,"New_Premier":null,"VAR_Price":531.67},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF211A012","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\8GB+128GB\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":350.9,"New_Premier":null,"VAR_Price":531.67},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF211A013","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\8GB+128GB\\GMS\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":350.9,"New_Premier":null,"VAR_Price":531.67},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF211A014","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\8GB+128GB\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":350.9,"New_Premier":null,"VAR_Price":531.67},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF211A018","spu":"Falcon 2 (WiFi only)","desc":"iMin\\Unbranded\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\BT\\GNSS\\NFC\\4GB+64GB\\GMS\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":254.1,"New_Premier":null,"VAR_Price":385.0},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF212A001","spu":"Falcon 2 (WiFi+LTE)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":290.4,"New_Premier":null,"VAR_Price":440.0},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF212A004","spu":"Falcon 2 (WiFi+LTE)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\GMS\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":290.4,"New_Premier":null,"VAR_Price":440.0},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF212A005","spu":"Falcon 2 (WiFi+LTE)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":290.4,"New_Premier":null,"VAR_Price":440.0},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF212A012","spu":"Falcon 2 (WiFi+LTE)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\8GB+128\\GMS\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":387.2,"New_Premier":null,"VAR_Price":586.67},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF212A013","spu":"Falcon 2 (WiFi+LTE)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\8GB+128GB\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":387.2,"New_Premier":null,"VAR_Price":586.67},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF212A014","spu":"Falcon 2 (WiFi+LTE)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\8GB+128\\GMS\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":387.2,"New_Premier":null,"VAR_Price":586.67},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF212A015","spu":"Falcon 2 (WiFi+LTE)","desc":"iMin\\Falcon 2\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\8GB+128GB\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":387.2,"New_Premier":null,"VAR_Price":586.67},"_jan":{"Premier_Legacy":203.0,"New_Premier":null,"VAR_Price":315.7}},{"sku":"TF232A002","spu":"Falcon 2 58mm Printer Dock","desc":"iMin\\Falcon 2 58mm Printer Dock\\Gray\\US PLUG B","MAY-2026":{"Premier_Legacy":54.45,"New_Premier":null,"VAR_Price":81.71},"_jan":{"Premier_Legacy":56.0,"New_Premier":null,"VAR_Price":81.18}},{"sku":"TF233A002","spu":"Falcon 2 80mm Printer Dock","desc":"iMin\\Falcon 2 80mm Printer Dock\\Gray\\US PLUG B","MAY-2026":{"Premier_Legacy":96.8,"New_Premier":null,"VAR_Price":145.27},"_jan":{"Premier_Legacy":96.0,"New_Premier":null,"VAR_Price":144.32}},{"sku":"TF234A001","spu":"Falcon 2 80mm Wireless Printer Dock","desc":"iMin\\Falcon 2 80mm Wireless Printer Dock\\WiFi\\BT\\Gray\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":225.33,"VAR_Price":257.52},"_jan":{"Premier_Legacy":null,"New_Premier":273.0,"VAR_Price":319.8}},{"sku":"TF231A001","spu":"Falcon 2 Basic Dock","desc":"iMin\\Falcon 2 Basic Dock\\Gray","MAY-2026":{"Premier_Legacy":36.3,"New_Premier":null,"VAR_Price":54.48},"_jan":{"Premier_Legacy":36.0,"New_Premier":null,"VAR_Price":54.12}},{"sku":"TF221A001","spu":"Falcon 2 Case","desc":"iMin\\Falcon 2 Case\\Protective Case\\Gray\\Hand Strap\\Shoulder Strap","MAY-2026":{"Premier_Legacy":24.2,"New_Premier":null,"VAR_Price":36.32},"_jan":{"Premier_Legacy":24.0,"New_Premier":null,"VAR_Price":36.08}},{"sku":"TF221A002","spu":"Falcon 2 Case","desc":"iMin\\Falcon 2 Case\\Protective Case\\Gray\\Old Hand Strap\\Shoulder Strap","MAY-2026":{"Premier_Legacy":24.2,"New_Premier":null,"VAR_Price":36.32},"_jan":{"Premier_Legacy":24.0,"New_Premier":null,"VAR_Price":36.08}},{"sku":"TF235A001","spu":"Falcon 2 Desktop Stand","desc":"iMin\\Falcon 2 Desktop Stand\\Landscape Mode\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":36.0,"New_Premier":null,"VAR_Price":54.12}},{"sku":"TF222A003","spu":"Falcon 2 Docking Case A","desc":"iMin\\Falcon 2 Docking Case A\\For Stripe M2\\Upgrade Buckle\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":69.33,"VAR_Price":79.24},"_jan":{"Premier_Legacy":null,"New_Premier":61.6,"VAR_Price":72.16}},{"sku":"TF223A003","spu":"Falcon 2 Docking Case B","desc":"iMin\\Falcon 2 Docking Case B\\For IDTech VP3350\\Upgrade Buckle\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":69.33,"VAR_Price":79.24},"_jan":{"Premier_Legacy":null,"New_Premier":61.6,"VAR_Price":72.16}},{"sku":"TF224A001","spu":"Falcon 2 Docking Case C","desc":"iMin\\Falcon 2 Docking Case C\\For Ingenico Moby5500\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":69.33,"VAR_Price":79.24},"_jan":{"Premier_Legacy":null,"New_Premier":61.6,"VAR_Price":72.16}},{"sku":"TF224A002","spu":"Falcon 2 Docking Case C","desc":"iMin\\Falcon 2 Docking Case C\\For Ingenico Moby5500/5500M\\Gray\\Upgrade Shell","MAY-2026":{"Premier_Legacy":null,"New_Premier":69.33,"VAR_Price":79.24},"_jan":{"Premier_Legacy":null,"New_Premier":61.6,"VAR_Price":72.16}},{"sku":"TF213A001","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\GMS\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":476.67,"VAR_Price":550.0},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF213A002","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\GMS\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":476.67,"VAR_Price":550.0},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF213A004","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\GMS\\Zebra Scanner\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":603.78,"VAR_Price":696.67},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF213A005","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\GMS\\Newland Scanner\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":540.22,"VAR_Price":623.33},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF213A006","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\GMS\\Newland Scanner\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":540.22,"VAR_Price":623.33},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF213A010","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\8GB+128GB\\GMS\\\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":603.78,"VAR_Price":696.67},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF213A011","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\8GB+128GB\\GMS\\\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":603.78,"VAR_Price":696.67},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF213A013","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\8GB+128GB\\GMS\\Newland Scanner\\Gray\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":667.33,"VAR_Price":770.0},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF213A014","spu":"Falcon 2 Max","desc":"iMin\\Falcon 2 Max\\Android 13\\8-Core 2.2GHz\\12.6\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 10000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\\\8GB+128GB\\GMS\\Newland Scanner\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":667.33,"VAR_Price":770.0},"_jan":{"Premier_Legacy":null,"New_Premier":408.1,"VAR_Price":478.06}},{"sku":"TF251A001","spu":"Falcon 2 Max Case","desc":"iMin\\Falcon 2 Max Case\\Gray\\Protective Case\\Gray\\Hand Strap\\Shoulder Strap","MAY-2026":{"Premier_Legacy":null,"New_Premier":47.67,"VAR_Price":54.48},"_jan":{"Premier_Legacy":null,"New_Premier":46.2,"VAR_Price":54.12}},{"sku":"TF225A001","spu":"Falcon 2 Rotatable Case","desc":"iMin\\Falcon 2 Rotate Case\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":61.6,"VAR_Price":72.16}},{"sku":"TF262A001","spu":"Falcon 2 with Basic Dock","desc":"iMin\\Falcon 2 with Basic Dock\\Android 13\\8-Core 2.2GHz\\10.95\"\\2MP Front Camera\\13MP Rear Camera\\3.89V 8000mAh Battery\\WiFi\\LTE\\BT\\GNSS\\NFC\\Fingerprint\\4GB+64GB\\Gray\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":429.0,"VAR_Price":490.29},"_jan":{"Premier_Legacy":36.0,"New_Premier":null,"VAR_Price":54.12}},{"sku":"AP02BA001","spu":"Floor Stand","desc":"iMin\\Floor Stand\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":433.33,"VAR_Price":495.24},"_jan":{"Premier_Legacy":290.0,"New_Premier":null,"VAR_Price":440.0}},{"sku":"SH134A001","spu":"Heron  Module Holder","desc":"iMin\\Module Holder\\For Payment Box\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"SH112A002","spu":"Heron 1","desc":"iMin\\Heron 1\\Android 15\\8-Core, 2.0GHz\\23.8\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Standard Scanner\\GMS\\Black\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":1126.67,"VAR_Price":1263.23},"_jan":{"Premier_Legacy":null,"New_Premier":1092.0,"VAR_Price":1248.0}},{"sku":"SH112A020","spu":"Heron 1","desc":"iMin\\Heron 1\\Android 15\\8-Core, 2.0GHz\\23.8\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Standard Scanner\\GMS\\Black\\4GB+64GB\\ARG PLUG I","MAY-2026":{"Premier_Legacy":null,"New_Premier":1126.67,"VAR_Price":1263.23},"_jan":{"Premier_Legacy":null,"New_Premier":1092.0,"VAR_Price":1248.0}},{"sku":"SH132A001","spu":"Heron 1 Desktop Stand","desc":"iMin\\Heron 1 Desktop Stand\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":86.67,"VAR_Price":99.05},"_jan":{"Premier_Legacy":null,"New_Premier":84.0,"VAR_Price":96.0}},{"sku":"SH133A003","spu":"Heron 1 Floor Stand","desc":"iMin\\Heron 1 Floor Stand\\Updated\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":433.33,"VAR_Price":495.24},"_jan":{"Premier_Legacy":null,"New_Premier":420.0,"VAR_Price":480.0}},{"sku":"SH111A002","spu":"Heron 1 mini","desc":"iMin\\Heron 1 mini\\Android 15\\8-Core, 2.0GHz\\15.6\"\\WiFi 6\\BT\\NFC\\80mm Printer\\Single Camera\\Standard Scanner\\GMS\\Black\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":832.0,"VAR_Price":932.85},"_jan":{"Premier_Legacy":null,"New_Premier":806.4,"VAR_Price":921.6}},{"sku":"SH121A001","spu":"Heron 1 mini Display","desc":"iMin\\Heron 1 mini Display\\15.6\"\\TP\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":260.0,"VAR_Price":297.14},"_jan":{"Premier_Legacy":null,"New_Premier":252.0,"VAR_Price":288.0}},{"sku":"SC142A001","spu":"Kiosk MSR","desc":"iMin\\Crane 1 MSR\\Pogopin Module\\Black","MAY-2026":{"Premier_Legacy":36.3,"New_Premier":null,"VAR_Price":54.48},"_jan":{"Premier_Legacy":36.0,"New_Premier":null,"VAR_Price":52.8}},{"sku":"SC143A001","spu":"Kiosk Status Light","desc":"iMin\\Crane 1 Status Light\\Pogopin Module\\Black","MAY-2026":{"Premier_Legacy":24.2,"New_Premier":null,"VAR_Price":36.32},"_jan":{"Premier_Legacy":24.0,"New_Premier":null,"VAR_Price":35.2}},{"sku":"SC143A002","spu":"Kiosk Status Light","desc":"iMin\\Crane 1 Status Light\\Pogopin Module\\Black\\Unbranded","MAY-2026":{"Premier_Legacy":24.2,"New_Premier":null,"VAR_Price":36.32},"_jan":{"Premier_Legacy":24.0,"New_Premier":null,"VAR_Price":35.2}},{"sku":"ML111A002","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Totinfo Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\4GB+32GB\\Black\\US PLUG A","MAY-2026":{"Premier_Legacy":266.2,"New_Premier":null,"VAR_Price":403.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A003","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Totinfo Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\4GB+32GB\\Black\\EU PLUG C","MAY-2026":{"Premier_Legacy":266.2,"New_Premier":null,"VAR_Price":403.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A005","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Totinfo Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\4GB+32GB\\Black\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":266.2,"New_Premier":null,"VAR_Price":403.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A006","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Totinfo Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\4GB+32GB\\Black\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":266.2,"New_Premier":null,"VAR_Price":403.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A008","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\4GB+64GB\\Black\\EU PLUG C","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":476.66},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A010","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\4GB+64GB\\Black\\US PLUG A","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":476.66},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A012","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\4GB+64GB\\Black\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":476.66},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A013","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\4GB+64GB\\Black\\US PLUG A","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":476.66},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A014","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\4GB+64GB\\Black\\EU PLUG C","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":476.66},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A016","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\4GB+64GB\\Black\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":476.66},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A017","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\Fingerprint\\8GB+128GB\\Black\\EU PLUG C","MAY-2026":{"Premier_Legacy":411.4,"New_Premier":null,"VAR_Price":623.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A019","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\Fingerprint\\8GB+128GB\\Black\\US PLUG A","MAY-2026":{"Premier_Legacy":411.4,"New_Premier":null,"VAR_Price":623.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A020","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\Fingerprint\\8GB+128GB\\Black\\US PLUG A","MAY-2026":{"Premier_Legacy":411.4,"New_Premier":null,"VAR_Price":623.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A021","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\Fingerprint\\8GB+128GB\\Black\\EU PLUG C","MAY-2026":{"Premier_Legacy":411.4,"New_Premier":null,"VAR_Price":623.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A023","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\Fingerprint\\8GB+128GB\\Black\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":411.4,"New_Premier":null,"VAR_Price":623.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A024","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\Fingerprint\\eSIM\\PSAM\\8GB+128GB\\Black\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":572.0,"VAR_Price":660.0},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A025","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\Fingerprint\\8GB+128GB\\Black\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":411.4,"New_Premier":null,"VAR_Price":623.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A029","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\Fingerprint\\8GB+128GB\\GMS\\Black\\US PLUG A","MAY-2026":{"Premier_Legacy":411.4,"New_Premier":null,"VAR_Price":623.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A030","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Rear Cover NFC\\4GB+64GB\\Black\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":476.66},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A031","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\4GB+64GB\\Black\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":476.66},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML111A037","spu":"Lark 1","desc":"iMin\\Lark 1\\Android 13\\8-Core, 2.2GHz\\6.5\"\\3.87V 5000mAh Battery\\2MP Front Camera\\13MP Rear Camera\\Zebra Scanner\\LTE\\WIFI\\BT\\GNSS\\Under-Display NFC\\Fingerprint\\GMS\\8GB+128GB\\Black\\EU PLUG C","MAY-2026":{"Premier_Legacy":411.4,"New_Premier":null,"VAR_Price":623.33},"_jan":{"Premier_Legacy":185.0,"New_Premier":null,"VAR_Price":333.74}},{"sku":"ML122A001","spu":"Lark 1 4-Slot Charging Cradle","desc":"iMin\\Lark 1 4-Slot Charging Cradle\\Black\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":111.22,"VAR_Price":127.11},"_jan":{"Premier_Legacy":null,"New_Premier":107.8,"VAR_Price":126.28}},{"sku":"ML122A003","spu":"Lark 1 4-Slot Charging Cradle","desc":"iMin\\Lark 1 4-Slot Charging Cradle\\Black\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":111.22,"VAR_Price":127.11},"_jan":{"Premier_Legacy":null,"New_Premier":107.8,"VAR_Price":126.28}},{"sku":"ML142A001","spu":"Lark 1 Battery","desc":"iMin\\Lark 1 Battery\\3.87V\\5000mAh\\Black","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":19.0,"New_Premier":null,"VAR_Price":27.06}},{"sku":"ML141A001","spu":"Lark 1 Case","desc":"iMin\\Lark 1 Case\\Black","MAY-2026":{"Premier_Legacy":12.1,"New_Premier":null,"VAR_Price":18.16},"_jan":{"Premier_Legacy":13.0,"New_Premier":null,"VAR_Price":18.04}},{"sku":"ML121A001","spu":"Lark 1 Single-slot Charger","desc":"iMin\\Lark 1 Single-slot Charger\\Black","MAY-2026":{"Premier_Legacy":24.2,"New_Premier":null,"VAR_Price":36.32},"_jan":{"Premier_Legacy":24.0,"New_Premier":null,"VAR_Price":36.08}},{"sku":"ML143A001","spu":"Lark 1 Strap","desc":"iMin\\Lark 1 Strap\\Black","MAY-2026":{"Premier_Legacy":6.05,"New_Premier":null,"VAR_Price":9.08},"_jan":{"Premier_Legacy":9.0,"New_Premier":null,"VAR_Price":9.02}},{"sku":"ML131A001","spu":"Lark 1 Trigger Handle","desc":"iMin\\Lark 1 Trigger Handle\\Gray","MAY-2026":{"Premier_Legacy":24.2,"New_Premier":null,"VAR_Price":36.32},"_jan":{"Premier_Legacy":24.0,"New_Premier":null,"VAR_Price":36.08}},{"sku":"ML132A001","spu":"Lark 1 UHF RFID Reader","desc":"iMin\\Lark 1 UHF RFID Reader\\Black\\US RFID Band","MAY-2026":{"Premier_Legacy":null,"New_Premier":317.78,"VAR_Price":363.18},"_jan":{"Premier_Legacy":null,"New_Premier":308.0,"VAR_Price":360.8}},{"sku":"ML132A002","spu":"Lark 1 UHF RFID Reader","desc":"iMin\\Lark 1 UHF RFID Reader\\Black\\EU RFID Band","MAY-2026":{"Premier_Legacy":null,"New_Premier":317.78,"VAR_Price":363.18},"_jan":{"Premier_Legacy":null,"New_Premier":308.0,"VAR_Price":360.8}},{"sku":"AP03AA001","spu":"Module Box A","desc":"iMin\\Payment Box Holder\\Black\\Moby5500&5500M module\\0.8m USB Cable","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"AP03BA001","spu":"Module Box B","desc":"iMin\\Payment Box Holder\\Black\\ID TECH VP3350 module\\0.8m USB Cable","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"AP03CA001","spu":"Module Box C","desc":"iMin\\Payment Box Holder\\Black\\Stripe M2 module\\0.8m USB Cable","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"SH131A001","spu":"Heron 1 POS Holder","desc":"iMin\\POS Holder\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":50.4,"VAR_Price":57.6}},{"sku":"DS253A001","spu":"Swan NFC&Camera","desc":"iMin\\Swan NFC&Camera\\Monocular\\RGB Camera 2MP\\NFC\\Black\\Unbranded","MAY-2026":{"Premier_Legacy":null,"New_Premier":47.67,"VAR_Price":54.48},"_jan":{"Premier_Legacy":null,"New_Premier":50.4,"VAR_Price":57.6}},{"sku":"DS253A002","spu":"Swan NFC&Camera","desc":"iMin\\Swan NFC&Camera\\Binoculars\\RGB Camera 2MP\\IR Camera 2MP\\NFC\\Black\\Unbranded","MAY-2026":{"Premier_Legacy":null,"New_Premier":63.55,"VAR_Price":72.63},"_jan":{"Premier_Legacy":null,"New_Premier":67.2,"VAR_Price":76.8}},{"sku":"TF241A001","spu":"Secondary Display 5 inch","desc":"iMin\\Falcon 2 Secondary Display 5 inch\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":55.61,"VAR_Price":63.55},"_jan":{"Premier_Legacy":null,"New_Premier":53.9,"VAR_Price":63.14}},{"sku":"DS115A001","spu":"Swan 1 (Gen 2)","desc":"iMin\\Swan 1 (Gen 2)\\Android 13\\8-Core, 2.0GHz\\15.6\" FHD\\WiFi6\\BT\\NFC\\Gray\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":381.33,"VAR_Price":433.93},"_jan":{"Premier_Legacy":null,"New_Premier":346.5,"VAR_Price":396.0}},{"sku":"DS115A004","spu":"Swan 1 (Gen 2)","desc":"iMin\\Swan 1 (Gen 2)\\Android 13\\8-Core, 2.0GHz\\15.6\" FHD\\WiFi6\\BT\\NFC\\Gray\\4GB+64GB\\GMS\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":381.33,"VAR_Price":433.93},"_jan":{"Premier_Legacy":null,"New_Premier":346.5,"VAR_Price":396.0}},{"sku":"DS131A001","spu":"Swan 1 Accessory 1","desc":"iMin\\Swan Accessory 1\\Table stand\\1m cable\\Gray","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":19.0,"New_Premier":null,"VAR_Price":26.4}},{"sku":"DS132A001","spu":"Swan 1 Accessory 2","desc":"iMin\\Swan Accessory 2\\Rotating shaft mount\\Gray","MAY-2026":{"Premier_Legacy":12.1,"New_Premier":null,"VAR_Price":18.16},"_jan":{"Premier_Legacy":13.0,"New_Premier":null,"VAR_Price":17.6}},{"sku":"DS132A002","spu":"Swan 1 Accessory 2","desc":"iMin\\Swan Accessory 2\\Rotating shaft mount\\Unbranded\\Gray","MAY-2026":{"Premier_Legacy":12.1,"New_Premier":null,"VAR_Price":18.16},"_jan":{"Premier_Legacy":13.0,"New_Premier":null,"VAR_Price":17.6}},{"sku":"DS132A003","spu":"Swan 1 Accessory 2","desc":"iMin\\Swan Accessory 2\\Rotating shaft mount\\Unbranded\\Silver","MAY-2026":{"Premier_Legacy":12.1,"New_Premier":null,"VAR_Price":18.16},"_jan":{"Premier_Legacy":13.0,"New_Premier":null,"VAR_Price":17.6}},{"sku":"DS133A001","spu":"Swan 1 Accessory 3","desc":"iMin\\Swan Accessory 3\\Signature mount\\1m cable\\Gray","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":19.0,"New_Premier":null,"VAR_Price":26.4}},{"sku":"DS134A001","spu":"Swan 1 Accessory 4","desc":"iMin\\Swan Accessory 4\\VESA mount\\Gray","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":19.0,"New_Premier":null,"VAR_Price":26.4}},{"sku":"DS121A001","spu":"Swan 1 Display","desc":"iMin\\Swan 1 Display\\10.1\" HD\\Gray\\Short cable","MAY-2026":{"Premier_Legacy":48.4,"New_Premier":null,"VAR_Price":72.63},"_jan":{"Premier_Legacy":55.0,"New_Premier":null,"VAR_Price":70.4}},{"sku":"DS122A001","spu":"Swan 1 Display","desc":"iMin\\Swan 1 Display\\10.1\" HD\\TP\\NFC\\Gray\\Short cable\\Unbranded","MAY-2026":{"Premier_Legacy":84.7,"New_Premier":null,"VAR_Price":127.11},"_jan":{"Premier_Legacy":55.0,"New_Premier":null,"VAR_Price":70.4}},{"sku":"DS122A002","spu":"Swan 1 Display","desc":"iMin\\Swan 1 Display\\10.1\" HD\\TP\\NFC\\Gray\\Short cable","MAY-2026":{"Premier_Legacy":84.7,"New_Premier":null,"VAR_Price":127.11},"_jan":{"Premier_Legacy":55.0,"New_Premier":null,"VAR_Price":70.4}},{"sku":"DS122A003","spu":"Swan 1 Display","desc":"iMin\\Swan 1 Display\\10.1\" HD\\TP\\NFC\\Silver\\Short cable","MAY-2026":{"Premier_Legacy":84.7,"New_Premier":null,"VAR_Price":127.11},"_jan":{"Premier_Legacy":55.0,"New_Premier":null,"VAR_Price":70.4}},{"sku":"DS122A004","spu":"Swan 1 Display","desc":"iMin\\Swan 1 Display\\10.1\" HD\\TP\\NFC\\Gray\\Short cable\\Unbranded\\Welded antenna","MAY-2026":{"Premier_Legacy":84.7,"New_Premier":null,"VAR_Price":127.11},"_jan":{"Premier_Legacy":55.0,"New_Premier":null,"VAR_Price":70.4}},{"sku":"DS113A004","spu":"Swan 1 Pro","desc":"iMin\\Swan 1 Pro\\Android 13\\8-Core, 2.2GHz\\15.6\" FHD\\WiFi6E\\BT\\Gray\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":375.1,"New_Premier":null,"VAR_Price":560.49},"_jan":{"Premier_Legacy":335.0,"New_Premier":null,"VAR_Price":484.0}},{"sku":"DS113A006","spu":"Swan 1 Pro","desc":"iMin\\Swan 1 Pro\\Android 13\\8-Core, 2.2GHz\\15.6\" FHD\\WiFi6E\\BT\\Gray\\4GB+64GB\\GMS\\US PLUG B","MAY-2026":{"Premier_Legacy":375.1,"New_Premier":null,"VAR_Price":560.49},"_jan":{"Premier_Legacy":335.0,"New_Premier":null,"VAR_Price":484.0}},{"sku":"DS113A012","spu":"Swan 1 Pro","desc":"iMin\\Swan 1 Pro\\Android 13\\8-Core, 2.2GHz\\15.6\" FHD\\WiFi6E\\BT\\Gray\\8GB+128GB\\US PLUG B","MAY-2026":{"Premier_Legacy":496.1,"New_Premier":null,"VAR_Price":741.3},"_jan":{"Premier_Legacy":335.0,"New_Premier":null,"VAR_Price":484.0}},{"sku":"DS113A017","spu":"Swan 1 Pro","desc":"iMin\\Swan 1 Pro\\Android 13\\8-Core, 2.2GHz\\15.6\" FHD\\WiFi6E\\BT\\Gray\\8GB+128GB\\GMS\\US PLUG B","MAY-2026":{"Premier_Legacy":496.1,"New_Premier":null,"VAR_Price":741.3},"_jan":{"Premier_Legacy":335.0,"New_Premier":null,"VAR_Price":484.0}},{"sku":"DS116A001","spu":"Swan 1k (Gen 2)","desc":"iMin\\Swan 1k (Gen 2)\\Android 13\\8-Core, 2.0GHz\\15.6\" FHD\\WiFi6\\BT\\NFC\\Gray\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":381.33,"VAR_Price":433.93},"_jan":{"Premier_Legacy":null,"New_Premier":346.5,"VAR_Price":396.0}},{"sku":"DS116A004","spu":"Swan 1k (Gen 2)","desc":"iMin\\Swan 1k (Gen 2)\\Android 13\\8-Core, 2.0GHz\\15.6\" FHD\\WiFi6\\BT\\Gray\\4GB+64GB\\GMS\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":381.33,"VAR_Price":433.93},"_jan":{"Premier_Legacy":null,"New_Premier":346.5,"VAR_Price":396.0}},{"sku":"DS116A007","spu":"Swan 1k (Gen 2)","desc":"iMin\\Swan 1k (Gen 2)\\Android 13\\8-Core, 2.0GHz\\15.6\" FHD\\WiFi6\\BT\\Gray\\4GB+64GB\\GMS\\IT PLUG L","MAY-2026":{"Premier_Legacy":null,"New_Premier":381.33,"VAR_Price":433.93},"_jan":{"Premier_Legacy":null,"New_Premier":346.5,"VAR_Price":396.0}},{"sku":"DS211A007","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"HD\\WiFi6\\BT\\GMS\\4GB+32GB\\White\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":317.78,"VAR_Price":361.61},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS211A010","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"HD\\WiFi6\\BT\\4GB+32GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":317.78,"VAR_Price":361.61},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS212A010","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"HD+10.1\"HD\\WiFi6\\BT\\4GB+32GB\\White\\2nd TP\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":413.11,"VAR_Price":470.09},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS212A013","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"HD+10.1\"HD\\WiFi6\\BT\\4GB+32GB\\White\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":381.33,"VAR_Price":433.93},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS212A016","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"HD+10.1\"HD\\WiFi6\\BT\\4GB+32GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":381.33,"VAR_Price":433.93},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS213A001","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":266.2,"New_Premier":null,"VAR_Price":397.77},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS213A005","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":266.2,"New_Premier":null,"VAR_Price":397.77},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS213A009","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\ARG PLUG I","MAY-2026":{"Premier_Legacy":266.2,"New_Premier":null,"VAR_Price":397.77},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS214A001","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":470.09},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS214A006","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":470.09},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS214A010","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\ARG PLUG I","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":470.09},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS214A011","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\4GB+64GB\\Black\\GMS\\IT PLUG L","MAY-2026":{"Premier_Legacy":314.6,"New_Premier":null,"VAR_Price":470.09},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS215A001","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\4GB+64GB\\Black\\2nd TP\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":508.45,"VAR_Price":578.58},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS215A004","spu":"Swan 2","desc":"iMin\\Swan 2\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\4GB+64GB\\Black\\GMS\\US PLUG B","MAY-2026":{"Premier_Legacy":363.0,"New_Premier":null,"VAR_Price":542.41},"_jan":{"Premier_Legacy":176.0,"New_Premier":null,"VAR_Price":264.0}},{"sku":"DS222A001","spu":"Swan 2 (Printer)","desc":"iMin\\Swan 2 (Printer)\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\58mm Printer\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":460.78,"VAR_Price":524.33},"_jan":{"Premier_Legacy":null,"New_Premier":384.3,"VAR_Price":439.2}},{"sku":"DS224A001","spu":"Swan 2 (Printer)","desc":"iMin\\Swan 2 (Printer)\\Android 13\\8-Core, 2.0GHz\\15.6\" FHD\\WiFi6\\BT\\NFC\\80mm Printer\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":338.8,"New_Premier":null,"VAR_Price":506.25},"_jan":{"Premier_Legacy":null,"New_Premier":384.3,"VAR_Price":439.2}},{"sku":"DS224A004","spu":"Swan 2 (Printer)","desc":"iMin\\Swan 2 (Printer)\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\80mm Printer\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":338.8,"New_Premier":null,"VAR_Price":506.25},"_jan":{"Premier_Legacy":null,"New_Premier":384.3,"VAR_Price":439.2}},{"sku":"DS224A008","spu":"Swan 2 (Printer)","desc":"iMin\\Swan 2 (Printer)\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\80mm Printer\\4GB+64GB\\Black\\GMS\\IT PLUG L","MAY-2026":{"Premier_Legacy":338.8,"New_Premier":null,"VAR_Price":506.25},"_jan":{"Premier_Legacy":null,"New_Premier":384.3,"VAR_Price":439.2}},{"sku":"DS225A001","spu":"Swan 2 (Printer)","desc":"iMin\\Swan 2 (Printer)\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\80mm Printer\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":387.2,"New_Premier":null,"VAR_Price":578.58},"_jan":{"Premier_Legacy":null,"New_Premier":384.3,"VAR_Price":439.2}},{"sku":"DS225A004","spu":"Swan 2 (Printer)","desc":"iMin\\Swan 2 (Printer)\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\80mm Printer\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":387.2,"New_Premier":null,"VAR_Price":578.58},"_jan":{"Premier_Legacy":null,"New_Premier":384.3,"VAR_Price":439.2}},{"sku":"DS225A008","spu":"Swan 2 (Printer)","desc":"iMin\\Swan 2 (Printer)\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\80mm Printer\\4GB+64GB\\Black\\GMS\\IT PLUG L","MAY-2026":{"Premier_Legacy":387.2,"New_Premier":null,"VAR_Price":578.58},"_jan":{"Premier_Legacy":null,"New_Premier":384.3,"VAR_Price":439.2}},{"sku":"DS226A001","spu":"Swan 2 (Printer)","desc":"iMin\\Swan 2 (Printer)\\Android 13\\8-Core, 2.0GHz\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\80mm Printer\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":435.6,"New_Premier":null,"VAR_Price":650.9},"_jan":{"Premier_Legacy":null,"New_Premier":384.3,"VAR_Price":439.2}},{"sku":"DS271A001","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":398.67,"VAR_Price":453.66},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS271A004","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":398.67,"VAR_Price":453.66},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS271A007","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":398.67,"VAR_Price":453.66},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS271A010","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":587.89,"VAR_Price":668.98},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS271A013","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":587.89,"VAR_Price":668.98},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS271A016","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":587.89,"VAR_Price":668.98},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS272A001","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":485.33,"VAR_Price":552.27},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS272A004","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":485.33,"VAR_Price":552.27},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS272A007","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":485.33,"VAR_Price":552.27},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS272A010","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":681.05,"VAR_Price":774.99},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS272A013","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":681.05,"VAR_Price":774.99},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS272A016","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":681.05,"VAR_Price":774.99},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS273A002","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":554.67,"VAR_Price":631.17},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS273A005","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":554.67,"VAR_Price":631.17},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS273A009","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":715.0,"VAR_Price":813.62},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS273A012","spu":"Swan 2 Pro","desc":"iMin\\Swan 2 Pro\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":715.0,"VAR_Price":813.62},"_jan":{"Premier_Legacy":null,"New_Premier":354.2,"VAR_Price":404.8}},{"sku":"DS284A002","spu":"Swan 2 Pro (Printer)","desc":"iMin\\Swan 2 Pro (Printer)\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD\\WiFi6\\BT\\NFC\\80mm Printer\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":554.67,"VAR_Price":631.17},"_jan":{"Premier_Legacy":null,"New_Premier":477.4,"VAR_Price":545.6}},{"sku":"DS284A006","spu":"Swan 2 Pro (Printer)","desc":"iMin\\Swan 2 Pro (Printer)\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD\\WiFi6\\BT\\NFC\\80mm Printer\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":715.0,"VAR_Price":813.62},"_jan":{"Premier_Legacy":null,"New_Premier":477.4,"VAR_Price":545.6}},{"sku":"DS285A001","spu":"Swan 2 Pro (Printer)","desc":"iMin\\Swan 2 Pro (Printer)\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\80mm Printer\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":624.0,"VAR_Price":710.07},"_jan":{"Premier_Legacy":null,"New_Premier":477.4,"VAR_Price":545.6}},{"sku":"DS285A004","spu":"Swan 2 Pro (Printer)","desc":"iMin\\Swan 2 Pro (Printer)\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD+10.1\"HD\\WiFi6\\BT\\NFC\\80mm Printer\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":778.56,"VAR_Price":885.94},"_jan":{"Premier_Legacy":null,"New_Premier":477.4,"VAR_Price":545.6}},{"sku":"DS286A001","spu":"Swan 2 Pro (Printer)","desc":"iMin\\Swan 2 Pro (Printer)\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\80mm Printer\\GMS\\4GB+64GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":693.33,"VAR_Price":788.96},"_jan":{"Premier_Legacy":null,"New_Premier":477.4,"VAR_Price":545.6}},{"sku":"DS286A004","spu":"Swan 2 Pro (Printer)","desc":"iMin\\Swan 2 Pro (Printer)\\Android 15\\8-Core, 2.0GHz\\Core board\\15.6\"FHD+15.6\"FHD\\WiFi6\\BT\\NFC\\80mm Printer\\GMS\\8GB+128GB\\Black\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":842.11,"VAR_Price":958.27},"_jan":{"Premier_Legacy":null,"New_Premier":477.4,"VAR_Price":545.6}},{"sku":"DS311A001","spu":"Swan 3","desc":"iMin\\Swan 3\\Android 15\\8-Core, 2.0GHz\\15.6\"\\WiFi 6\\BT\\GMS\\Gray\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":537.34,"VAR_Price":611.45},"_jan":{"Premier_Legacy":null,"New_Premier":470.4,"VAR_Price":537.6}},{"sku":"DS351A001","spu":"Swan 3 10.1\" Display (Payment Ver.)","desc":"iMin\\Swan 3 10.1\" Payment Customer Facing Display\\10.1\"\\Gray\\Moby5500&5500M\\TP","MAY-2026":{"Premier_Legacy":null,"New_Premier":208.0,"VAR_Price":237.71},"_jan":{"Premier_Legacy":null,"New_Premier":184.8,"VAR_Price":211.2}},{"sku":"DS322A001","spu":"Swan 3 10.1\" Display","desc":"iMin\\Swan 3 10.1\" Customer Facing Display\\10.1\"\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":121.33,"VAR_Price":138.66},"_jan":{"Premier_Legacy":null,"New_Premier":117.6,"VAR_Price":134.4}},{"sku":"DS322A002","spu":"Swan 3 10.1\" Display","desc":"iMin\\Swan 3 10.1\" Customer Facing Display\\10.1\"\\Gray\\TP","MAY-2026":{"Premier_Legacy":null,"New_Premier":156.0,"VAR_Price":178.29},"_jan":{"Premier_Legacy":null,"New_Premier":151.2,"VAR_Price":172.8}},{"sku":"DS331A001","spu":"Swan 3 Camera","desc":"iMin\\Swan 3 Camera\\1920*1080\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":69.33,"VAR_Price":79.24},"_jan":{"Premier_Legacy":null,"New_Premier":67.2,"VAR_Price":76.8}},{"sku":"DS332A001","spu":"Swan 3 MSR","desc":"iMin\\Swan 3 MSR\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":50.4,"VAR_Price":57.6}},{"sku":"DS341A001","spu":"Swan 3 Payment Module Holder","desc":"iMin\\Swan 3 Payment Box\\Moby5500&5500M\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":50.4,"VAR_Price":57.6}},{"sku":"DS361A001","spu":"Swan 3 Pro","desc":"iMin\\Swan 3 Pro\\Android 15\\8-Core, 2.6GHz\\15.6\"\\WiFi 6E\\BT\\GMS\\Gray\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":710.67,"VAR_Price":808.69},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"DS361A005","spu":"Swan 3 Pro","desc":"iMin\\Swan 3 Pro\\Android 15\\8-Core, 2.6GHz\\15.6\"\\WiFi 6E\\BT\\GMS\\Gray\\8GB+128GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":884.0,"VAR_Price":1005.93},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"DS362A001","spu":"Swan 3 Pro","desc":"iMin\\Swan 3 Pro\\Android 15\\8-Core, 2.6GHz\\15.6\"+10.1\"\\WiFi 6E\\BT\\NFC\\GMS\\Gray\\4GB+64GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":901.33,"VAR_Price":1025.65},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"DS362A004","spu":"Swan 3 Pro","desc":"iMin\\Swan 3 Pro\\Android 15\\8-Core, 2.6GHz\\15.6\"+10.1\"\\WiFi 6E\\BT\\NFC\\GMS\\Gray\\8GB+128GB\\US PLUG B","MAY-2026":{"Premier_Legacy":null,"New_Premier":1074.66,"VAR_Price":1222.89},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"DS321A001","spu":"Swan 3 Digital Display","desc":"iMin\\Swan 3 Segment Display\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":34.66,"VAR_Price":39.62},"_jan":{"Premier_Legacy":null,"New_Premier":33.6,"VAR_Price":38.4}},{"sku":"DS254A001","spu":"Swan AI Camera","desc":"iMin\\Swan AI Camera\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":47.67,"VAR_Price":54.48},"_jan":{"Premier_Legacy":null,"New_Premier":46.2,"VAR_Price":52.8}},{"sku":"DS251A001","spu":"Swan NFC","desc":"iMin\\Swan NFC\\Black","MAY-2026":{"Premier_Legacy":12.1,"New_Premier":null,"VAR_Price":18.16},"_jan":{"Premier_Legacy":13.0,"New_Premier":null,"VAR_Price":17.6}},{"sku":"DS252A001","spu":"Swan NFC&Scanner A","desc":"iMin\\Swan NFC&Scanner A\\Black","MAY-2026":{"Premier_Legacy":36.3,"New_Premier":null,"VAR_Price":54.48},"_jan":{"Premier_Legacy":36.0,"New_Premier":null,"VAR_Price":52.8}},{"sku":"DS255A001","spu":"Swan NFC&Scanner B","desc":"iMin\\Swan NFC&Scanner B\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":47.67,"VAR_Price":54.48},"_jan":{"Premier_Legacy":null,"New_Premier":46.2,"VAR_Price":52.8}},{"sku":"MS125A001","spu":"Swift 1 Docking Case A","desc":"iMin\\Swift 1 Payment Case A\\For Stripe M2\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":43.33,"VAR_Price":49.52},"_jan":{"Premier_Legacy":null,"New_Premier":38.5,"VAR_Price":45.1}},{"sku":"MS125A002","spu":"Swift 1 Docking Case A","desc":"iMin\\Swift 1 Payment Case A\\For Stripe M2\\New shell\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":43.33,"VAR_Price":49.52},"_jan":{"Premier_Legacy":null,"New_Premier":38.5,"VAR_Price":45.1}},{"sku":"MS115A001","spu":"Swift 1 Pro","desc":"iMin\\Swift 1 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\LTE\\WIFI5\\BT\\GPS\\NFC\\0.3MP Front Camera\\5MP Rear Camera\\7.6V 2500mAh Battery\\Black\\GMS\\4GB+32GB\\US PLUG A","MAY-2026":{"Premier_Legacy":217.8,"New_Premier":null,"VAR_Price":330.0},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS115A002","spu":"Swift 1 Pro","desc":"iMin\\Swift 1 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\LTE\\WIFI5\\BT\\GPS\\NFC\\0.3MP Front Camera\\5MP Rear Camera\\7.6V 2500mAh Battery\\Black\\GMS\\4GB+32GB\\EU PLUG C","MAY-2026":{"Premier_Legacy":217.8,"New_Premier":null,"VAR_Price":330.0},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS115A004","spu":"Swift 1 Pro","desc":"iMin\\Swift 1 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\LTE\\WIFI5\\BT\\GPS\\NFC\\0.3MP Front Camera\\5MP Rear Camera\\7.6V 2500mAh Battery\\Black\\4GB+32GB\\US PLUG A","MAY-2026":{"Premier_Legacy":217.8,"New_Premier":null,"VAR_Price":330.0},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS115A005","spu":"Swift 1 Pro","desc":"iMin\\Swift 1 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\LTE\\WIFI5\\BT\\GPS\\NFC\\0.3MP Front Camera\\5MP Rear Camera\\7.6V 2500mAh Battery\\Black\\4GB+32GB\\EU PLUG C","MAY-2026":{"Premier_Legacy":217.8,"New_Premier":null,"VAR_Price":330.0},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS115A007","spu":"Swift 1 Pro","desc":"iMin\\Swift 1 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\LTE\\WIFI5\\BT\\GPS\\0.3MP Front Camera\\5MP Rear Camera\\7.6V 2500mAh Battery\\Black\\4GB+32GB\\US PLUG A","MAY-2026":{"Premier_Legacy":205.7,"New_Premier":null,"VAR_Price":311.66},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS115A008","spu":"Swift 1 Pro","desc":"iMin\\Swift 1 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\LTE\\WIFI5\\BT\\GPS\\0.3MP Front Camera\\5MP Rear Camera\\7.6V 2500mAh Battery\\Black\\GMS\\4GB+32GB\\US PLUG A","MAY-2026":{"Premier_Legacy":205.7,"New_Premier":null,"VAR_Price":311.66},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS115A009","spu":"Swift 1 Pro","desc":"iMin\\Swift 1 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\LTE\\WIFI5\\BT\\GPS\\0.3MP Front Camera\\5MP Rear Camera\\7.6V 2500mAh Battery\\Black\\4GB+32GB\\EU PLUG C","MAY-2026":{"Premier_Legacy":205.7,"New_Premier":null,"VAR_Price":311.66},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS115A010","spu":"Swift 1 Pro","desc":"iMin\\Swift 1 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\LTE\\WIFI5\\BT\\GPS\\0.3MP Front Camera\\5MP Rear Camera\\7.6V 2500mAh Battery\\Black\\GMS\\4GB+32GB\\EU PLUG C","MAY-2026":{"Premier_Legacy":205.7,"New_Premier":null,"VAR_Price":311.66},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS131A001","spu":"Swift 1 Pro Dock","desc":"iMin\\Swift 1 Pro Dock\\Support Charging\\Type-C*1\\Black","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":18.0,"New_Premier":null,"VAR_Price":27.06}},{"sku":"MS131D001","spu":"Swift 1 Pro Dock","desc":"Unbranded\\Swift 1 Pro Dock\\Support Charging\\Type-C*1\\Black","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":18.0,"New_Premier":null,"VAR_Price":27.06}},{"sku":"MS126A002","spu":"Swift 1 Pro Docking Case B","desc":"iMin\\Swift 1 Pro Docking Case B\\For Ingenico Moby5500\\new shell\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":43.33,"VAR_Price":49.52},"_jan":{"Premier_Legacy":null,"New_Premier":38.5,"VAR_Price":45.1}},{"sku":"MS127A001","spu":"Swift 1 Pro Docking Case C","desc":"iMin\\Swift 1 Pro Docking Case C\\For IDTech VP3350\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":38.5,"VAR_Price":45.1}},{"sku":"MS211A002","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\EU PLUG C","MAY-2026":{"Premier_Legacy":169.4,"New_Premier":null,"VAR_Price":256.67},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS211A003","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\US PLUG A","MAY-2026":{"Premier_Legacy":169.4,"New_Premier":null,"VAR_Price":256.67},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS211A006","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":169.4,"New_Premier":null,"VAR_Price":256.67},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS211A007","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":169.4,"New_Premier":null,"VAR_Price":256.67},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS211A009","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\NFC\\EU PLUG C","MAY-2026":{"Premier_Legacy":181.5,"New_Premier":null,"VAR_Price":275.0},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS211A010","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\NFC\\US PLUG A","MAY-2026":{"Premier_Legacy":181.5,"New_Premier":null,"VAR_Price":275.0},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS211A012","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\NFC\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":181.5,"New_Premier":null,"VAR_Price":275.0},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS211A013","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\NFC\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":181.5,"New_Premier":null,"VAR_Price":275.0},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS211A014","spu":"Swift 2","desc":"iMin\\Swift 2\\Android 13\\4-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\2GB+16GB\\Red\\No adapter","MAY-2026":{"Premier_Legacy":184.8,"New_Premier":null,"VAR_Price":280.0},"_jan":{"Premier_Legacy":137.0,"New_Premier":null,"VAR_Price":207.46}},{"sku":"MS223A001","spu":"Swift 2 Case","desc":"iMin\\Swift 2 Case\\Protective Case\\Gray","MAY-2026":{"Premier_Legacy":null,"New_Premier":15.89,"VAR_Price":18.16},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"MS221A001","spu":"Swift 2 Dock","desc":"iMin\\Swift 2 Dock\\2 x USB-A ports\\10W\\Black","MAY-2026":{"Premier_Legacy":18.15,"New_Premier":null,"VAR_Price":27.24},"_jan":{"Premier_Legacy":18.0,"New_Premier":null,"VAR_Price":27.06}},{"sku":"MS212A002","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+32GB\\Red\\EU PLUG C","MAY-2026":{"Premier_Legacy":193.6,"New_Premier":null,"VAR_Price":293.33},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS212A003","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+32GB\\Red\\US PLUG A","MAY-2026":{"Premier_Legacy":193.6,"New_Premier":null,"VAR_Price":293.33},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS212A006","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+32GB\\Red\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":193.6,"New_Premier":null,"VAR_Price":293.33},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS212A007","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+32GB\\Red\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":193.6,"New_Premier":null,"VAR_Price":293.33},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS212A009","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+32GB\\Red\\NFC\\EU PLUG C","MAY-2026":{"Premier_Legacy":217.8,"New_Premier":null,"VAR_Price":330.0},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS212A010","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+32GB\\Red\\NFC\\US PLUG A","MAY-2026":{"Premier_Legacy":217.8,"New_Premier":null,"VAR_Price":330.0},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS212A013","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+32GB\\Red\\NFC\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":217.8,"New_Premier":null,"VAR_Price":330.0},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS212A014","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+32GB\\Red\\NFC\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":217.8,"New_Premier":null,"VAR_Price":330.0},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS212A021","spu":"Swift 2 Pro","desc":"iMin\\Swift 2 Pro\\Android 13\\8-Core, 2.0GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer(HPRT) \\4GB+32GB\\Red\\eSIM\\PSAM\\NFC\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":317.78,"VAR_Price":366.67},"_jan":{"Premier_Legacy":164.0,"New_Premier":null,"VAR_Price":252.56}},{"sku":"MS213A001","spu":"Swift 2 Ultra","desc":"iMin\\Swift 2 Ultra\\Android 13\\8-Core, 2.2GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+64GB\\Red\\NFC\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":309.83,"VAR_Price":357.5},"_jan":{"Premier_Legacy":null,"New_Premier":254.1,"VAR_Price":297.66}},{"sku":"MS213A002","spu":"Swift 2 Ultra","desc":"iMin\\Swift 2 Ultra\\Android 13\\8-Core, 2.2GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+64GB\\Red\\NFC\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":309.83,"VAR_Price":357.5},"_jan":{"Premier_Legacy":null,"New_Premier":254.1,"VAR_Price":297.66}},{"sku":"MS213A005","spu":"Swift 2 Ultra","desc":"iMin\\Swift 2 Ultra\\Android 13\\8-Core, 2.2GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+64GB\\Red\\NFC\\Fingerprint\\Newland Scanner\\Hand Strap\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":373.39,"VAR_Price":430.84},"_jan":{"Premier_Legacy":null,"New_Premier":254.1,"VAR_Price":297.66}},{"sku":"MS213A006","spu":"Swift 2 Ultra","desc":"iMin\\Swift 2 Ultra\\Android 13\\8-Core, 2.2GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+64GB\\Red\\NFC\\Fingerprint\\Newland Scanner\\Hand Strap\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":373.39,"VAR_Price":430.84},"_jan":{"Premier_Legacy":null,"New_Premier":254.1,"VAR_Price":297.66}},{"sku":"MS213A007","spu":"Swift 2 Ultra","desc":"iMin\\Swift 2 Ultra\\Android 13\\8-Core, 2.2GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+64GB\\Red\\NFC\\Fingerprint\\Newland Scanner\\Hand Strap\\eSIM\\PSAM\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":413.11,"VAR_Price":476.66},"_jan":{"Premier_Legacy":null,"New_Premier":254.1,"VAR_Price":297.66}},{"sku":"MS213A009","spu":"Swift 2 Ultra","desc":"iMin\\Swift 2 Ultra\\Android 13\\8-Core, 2.2GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+64GB\\Red\\NFC\\Fingerprint\\Zebra Scanner\\Hand Strap\\GMS\\US PLUG A","MAY-2026":{"Premier_Legacy":null,"New_Premier":421.05,"VAR_Price":485.83},"_jan":{"Premier_Legacy":null,"New_Premier":254.1,"VAR_Price":297.66}},{"sku":"MS213A010","spu":"Swift 2 Ultra","desc":"iMin\\Swift 2 Ultra\\Android 13\\8-Core, 2.2GHz\\6.5\"\\7.7V 3350mAh Battery\\5MP Rear Camera\\LTE\\WIFI\\BT\\GNSS\\58mm Printer\\4GB+64GB\\Red\\NFC\\Fingerprint\\Zebra Scanner\\Hand Strap\\GMS\\EU PLUG C","MAY-2026":{"Premier_Legacy":null,"New_Premier":421.05,"VAR_Price":485.83},"_jan":{"Premier_Legacy":null,"New_Premier":254.1,"VAR_Price":297.66}},{"sku":"MS222A001","spu":"Swift 2 Ultra","desc":"iMin\\Swift 2 Ultra Dock\\2 x USB-A ports\\20W\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":23.83,"VAR_Price":27.24},"_jan":{"Premier_Legacy":null,"New_Premier":254.1,"VAR_Price":297.66}},{"sku":"MS231A001","spu":"Swift Battery","desc":"iMin\\Swift Battery\\7.7V\\3350mAh\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":23.83,"VAR_Price":27.24},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"MS232D001","spu":"Swift Smart Battery","desc":"iMin\\Swift Smart Battery\\7.7V\\3350mAh\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":31.78,"VAR_Price":36.32},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"AP01AA001","spu":"Vesa Mount 100x100","desc":"iMin\\Vesa Mount 100x100\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":34.66,"VAR_Price":39.62},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}},{"sku":"AP01BA001","spu":"Vesa Mount 100x200","desc":"iMin\\Vesa Mount 100x200\\Black","MAY-2026":{"Premier_Legacy":null,"New_Premier":52.0,"VAR_Price":59.43},"_jan":{"Premier_Legacy":null,"New_Premier":null,"VAR_Price":null}}];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let state = { periods: ['MAY-2026'], products: [] };
+let pendingFile = null, pendingData = null;
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+async function init() {
+  // Restore saved API URL
+  const savedUrl = localStorage.getItem(API_URL_KEY) || DEFAULT_API_URL;
+  document.getElementById('apiUrl').value = savedUrl;
+
+  // Try to load from Sheets; fall back to local cache or BASE
+  await reloadFromSheets();
+}
+
+function saveApiUrl() {
+  const url = document.getElementById('apiUrl').value.trim();
+  localStorage.setItem(API_URL_KEY, url);
+}
+
+// ─── LOAD FROM SHEETS ─────────────────────────────────────────────────────────
+async function reloadFromSheets() {
+  const apiUrl = document.getElementById('apiUrl').value.trim();
+  setSyncBadge('loading', '⏳ Conectando…');
+
+  if (!apiUrl) {
+    // No URL configured: use cached or BASE
+    loadFromCacheOrBase();
+    setSyncBadge('err', '⚠ Sin URL configurada');
+    return;
+  }
+
+  showLoading('Cargando datos desde Google Sheets…');
+  try {
+    // Apps Script requiere seguir redirects manualmente para preservar CORS
+    const res = await fetch(apiUrl, { method: 'GET', redirect: 'follow' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Error de Sheets');
+
+    state.periods  = data.periods;
+    state.products = data.products;
+    saveCache();
+    setSyncBadge('ok', '✓ Sincronizado');
+    showStatus('ok', '✓ Datos actualizados desde Google Sheets');
+  } catch(err) {
+    console.warn('Sheets fetch failed:', err.message);
+    setSyncBadge('err', '✗ Sin conexión a Sheets');
+    loadFromCacheOrBase();
+    showStatus('warn', '⚠ Sin conexión a Sheets — mostrando caché local');
+  } finally {
+    hideLoading();
+    renderPills();
+    renderTable();
+    updateStats();
+  }
+}
+
+function loadFromCacheOrBase() {
+  try {
+    const cached = localStorage.getItem(LOCAL_KEY);
+    if (cached) {
+      const c = JSON.parse(cached);
+      state.periods  = c.periods  || ['MAY-2026'];
+      state.products = c.products || BASE_PRODUCTS;
+      return;
+    }
+  } catch(e) {}
+  state.periods  = ['MAY-2026'];
+  state.products = JSON.parse(JSON.stringify(BASE_PRODUCTS));
+}
+
+function saveCache() {
+  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+// ─── PILLS ────────────────────────────────────────────────────────────────────
+function renderPills() {
+  document.getElementById('pills').innerHTML = state.periods.map((p,i) => {
+    const cls = i === 0 ? 'base' : i === state.periods.length-1 ? 'latest' : '';
+    return `<div class="pill ${cls}">${p}</div>`;
+  }).join('');
+}
+
+// ─── FILE HANDLING ────────────────────────────────────────────────────────────
+const dz = document.getElementById('dz');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
+
+function handleFile(e) { if(e.target.files[0]) processFile(e.target.files[0]); e.target.value=''; }
+
+function processFile(file) {
+  showStatus('inf', '⏳ Leyendo ' + file.name + '...');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, {defval:null});
+      if (!data.length) throw new Error('Archivo vacío');
+      const cols = Object.keys(data[0]);
+      const skuCol = cols.find(c => /new.?sku|^sku$/i.test(c));
+      const spuCol = cols.find(c => /^spu$/i.test(c));
+      const descCol = cols.find(c => /description/i.test(c));
+      const legacyCol = cols.find(c => /legacy/i.test(c));
+      const premCol   = cols.find(c => /new.?premier|^premier/i.test(c) && !/legacy/i.test(c));
+      const varCol    = cols.find(c => /var.?price|var_price/i.test(c));
+      if (!skuCol) throw new Error('No encontré columna New_SKU. Columnas: ' + cols.join(', '));
+      pendingFile = file;
+      pendingData = {data, skuCol, spuCol, descCol, legacyCol, premCol, varCol};
+      document.getElementById('fname').textContent = file.name;
+      document.getElementById('finfo').textContent = data.length + ' filas · ' + cols.length + ' columnas';
+      document.getElementById('fprev').classList.add('show');
+      const today = new Date();
+      const months = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+      const inp = document.getElementById('pInput');
+      if (!inp.value) inp.value = months[today.getMonth()] + '-' + today.getFullYear();
+      document.getElementById('addBtn').disabled = false;
+      showStatus('ok', '✓ Archivo válido — ' + data.length + ' productos');
+    } catch(err) {
+      showStatus('err', '✗ ' + err.message);
+      pendingFile = null; pendingData = null;
+      document.getElementById('addBtn').disabled = true;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── ADD PERIOD ────────────────────────────────────────────────────────────────
+async function addPeriod() {
+  const period   = document.getElementById('pInput').value.trim().toUpperCase();
+  const password = document.getElementById('pwInput').value;
+  const apiUrl   = document.getElementById('apiUrl').value.trim();
+
+  if (!period)         { showStatus('err', '✗ Ingresá un período (ej: AGO-2026)'); return; }
+  if (!/^[A-Z]{2,4}-\d{4}$/.test(period)) { showStatus('err', '✗ Formato inválido. Ej: AGO-2026'); return; }
+  if (state.periods.includes(period)) { showStatus('err', '✗ El período ' + period + ' ya existe'); return; }
+  if (!pendingData) { showStatus('err', '✗ Cargá un archivo primero'); return; }
+  if (!password)    { showStatus('err', '✗ Ingresá la contraseña'); return; }
+  if (!apiUrl)      { showStatus('err', '✗ Configurá la URL de Apps Script primero'); return; }
+
+  const {data, skuCol, spuCol, descCol, legacyCol, premCol, varCol} = pendingData;
+
+  // Build products array for the new period
+  const newProds = data
+    .filter(row => row[skuCol])
+    .map(row => ({
+      sku: String(row[skuCol]).trim(),
+      spu: spuCol ? (row[spuCol] || '') : '',
+      desc: descCol ? (row[descCol] || '') : '',
+      Premier_Legacy: legacyCol ? (parseFloat(row[legacyCol]) || null) : null,
+      New_Premier:    premCol   ? (parseFloat(row[premCol])   || null) : null,
+      VAR_Price:      varCol    ? (parseFloat(row[varCol])    || null) : null,
+    }));
+
+  // Confirm modal
+  const confirmed = await confirm2(
+    `Agregar período ${period}`,
+    `Se enviarán ${newProds.length} productos a Google Sheets. Esta acción actualizará los datos para todos los usuarios.`
+  );
+  if (!confirmed) return;
+
+  showLoading('Enviando datos a Google Sheets…');
+  document.getElementById('addBtn').disabled = true;
+
+  try {
+    // Enviamos como form-encoded para evitar CORS preflight
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify({ password, period, products: newProds }));
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      body: formData,
+      redirect: 'follow'
+    });
+    const data2 = await res.json();
+    if (!data2.ok) throw new Error(data2.error || 'Error desconocido');
+
+    showStatus('ok', `✓ Período ${period} guardado en Sheets. ${data2.newSkus || 0} SKUs nuevos.`);
+    clearFile();
+    // Reload from Sheets to get fresh data
+    await reloadFromSheets();
+  } catch(err) {
+    showStatus('err', '✗ ' + err.message);
+    document.getElementById('addBtn').disabled = false;
+  } finally {
+    hideLoading();
+  }
+}
+
+function clearFile() {
+  pendingFile = null; pendingData = null;
+  document.getElementById('fprev').classList.remove('show');
+  document.getElementById('pInput').value = '';
+  document.getElementById('pwInput').value = '';
+  document.getElementById('addBtn').disabled = true;
+  document.getElementById('fileInput').value = '';
+}
+
+// ─── TABLE ─────────────────────────────────────────────────────────────────────
+function fmt(v) { return v == null ? '—' : '$' + Number(v).toFixed(2); }
+
+function varCell(oldV, newV) {
+  if (oldV == null || newV == null) {
+    if (oldV == null && newV != null) return `<td class="vr vn">NUEVO</td>`;
+    return `<td class="vr vm">—</td>`;
+  }
+  if (oldV === 0) return `<td class="vr vm">—</td>`;
+  const pct = (newV - oldV) / oldV;
+  const sign = pct >= 0 ? '+' : '';
+  const cls = pct > 0.001 ? 'vu' : pct < -0.001 ? 'vd' : 'vm';
+  return `<td class="vr ${cls}">${sign}${(pct*100).toFixed(1)}%</td>`;
+}
+
+function renderTable() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const periods = state.periods;
+  const products = state.products;
+
+  // Headers
+  const thead = document.getElementById('thead');
+  let hdr = '<tr><th>SKU</th><th>SPU</th><th>Descripción</th>';
+  periods.forEach((p, pi) => {
+    PRICE_COLS.forEach((col, ci) => {
+      const lbl = col.replace('_',' ');
+      const plCls = ci===0 ? ' pl' : '';
+      hdr += `<th class="ph${plCls}">${lbl}<br><span style="font-size:9px;color:#94a3b8;font-weight:400">${p}</span></th>`;
+    });
+    if (pi > 0) {
+      const prev = periods[pi-1];
+      PRICE_COLS.forEach(col => {
+        const lbl = col==='Premier_Legacy'?'Prem.Leg':col==='New_Premier'?'New Prem':'VAR';
+        hdr += `<th class="vh">${lbl}<br><span style="font-size:9px;font-weight:400">${prev.split('-')[0]}→${p.split('-')[0]}</span></th>`;
+      });
+    }
+  });
+  hdr += '</tr>';
+  thead.innerHTML = hdr;
+
+  const filtered = products.filter(p =>
+    p.sku.toLowerCase().includes(q) ||
+    (p.spu && p.spu.toLowerCase().includes(q)) ||
+    (p.desc && p.desc.toLowerCase().includes(q))
+  );
+
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+
+  if (!filtered.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(p => {
+    let row = `<tr>
+      <td class="sku">${p.sku}</td>
+      <td class="spu">${p.spu || '<span style="color:#d1d5db">—</span>'}</td>
+      <td class="desc" title="${p.desc||''}">${p.desc||''}</td>`;
+    periods.forEach((per, pi) => {
+      const d = p[per] || {};
+      PRICE_COLS.forEach((col, ci) => {
+        const val = d[col];
+        const plCls = ci===0?' pl':'';
+        const nilCls = val==null?' nil':'';
+        row += `<td class="pr${plCls}${nilCls}">${fmt(val)}</td>`;
+      });
+      if (pi > 0) {
+        const prev = p[periods[pi-1]] || {};
+        PRICE_COLS.forEach(col => { row += varCell(prev[col], d[col]); });
+      }
+    });
+    row += '</tr>';
+    return row;
+  }).join('');
+}
+
+// ─── STATS ─────────────────────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('stProds').textContent = state.products.length;
+  document.getElementById('stPers').textContent  = state.periods.length;
+  if (state.periods.length >= 2) {
+    const p1 = state.periods[state.periods.length-2];
+    const p2 = state.periods[state.periods.length-1];
+    let newSku=0, up=0, down=0;
+    state.products.forEach(p => {
+      const prev = (p[p1]||{}).VAR_Price;
+      const curr = (p[p2]||{}).VAR_Price;
+      if (!prev && curr) newSku++;
+      if (prev && curr) { if(curr>prev) up++; else if(curr<prev) down++; }
+    });
+    document.getElementById('stNew').textContent  = newSku;
+    document.getElementById('stUp').textContent   = up;
+    document.getElementById('stDown').textContent = down;
+  }
+}
+
+// ─── EXPORT ─────────────────────────────────────────────────────────────────────
+function exportXLSX() {
+  const wb = XLSX.utils.book_new();
+  const headers = ['New_SKU','SPU','Description'];
+  state.periods.forEach(p => PRICE_COLS.forEach(c => headers.push(c+'\n'+p)));
+  state.periods.forEach((p, pi) => {
+    if (pi > 0) {
+      const prev = state.periods[pi-1];
+      PRICE_COLS.forEach(c => headers.push('Var%_'+c.split('_')[0]+'\n'+prev+'→'+p));
+    }
+  });
+  const rows = [headers];
+  state.products.forEach(p => {
+    const row = [p.sku, p.spu||'', p.desc||''];
+    state.periods.forEach(per => {
+      const d = p[per] || {};
+      PRICE_COLS.forEach(c => row.push(d[c] != null ? d[c] : ''));
+    });
+    state.periods.forEach((per, pi) => {
+      if (pi > 0) {
+        const prev = p[state.periods[pi-1]] || {};
+        const d = p[per] || {};
+        PRICE_COLS.forEach(c => {
+          const pv = prev[c], nv = d[c];
+          if (pv && nv && pv !== 0) row.push(parseFloat(((nv-pv)/pv*100).toFixed(2)));
+          else if (!pv && nv) row.push('NUEVO');
+          else row.push('');
+        });
+      }
+    });
+    rows.push(row);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = headers.map((_,i) => ({wch: i<3?24:14}));
+  XLSX.utils.book_append_sheet(wb, ws, 'Price History');
+  XLSX.writeFile(wb, 'iMin_Price_Tracker_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+// ─── UI HELPERS ──────────────────────────────────────────────────────────────
+function setSyncBadge(type, msg) {
+  const el = document.getElementById('syncBadge');
+  el.className = 'sync-badge sync-' + type;
+  el.textContent = msg;
+}
+function showStatus(type, msg) {
+  const el = document.getElementById('status');
+  el.className = 'status ' + type + ' show';
+  el.textContent = msg;
+  if (type === 'ok') setTimeout(() => el.classList.remove('show'), 5000);
+}
+function showLoading(msg) {
+  document.getElementById('loadingMsg').textContent = msg || 'Cargando…';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
+
+// Promise-based confirm modal
+function confirm2(title, body) {
+  return new Promise(resolve => {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalBody').textContent  = body;
+    document.getElementById('confirmModal').classList.add('show');
+    document.getElementById('modalOk').onclick = () => { closeModal(); resolve(true); };
+    document.getElementById('confirmModal').querySelector('.btn-ghost').onclick = () => { closeModal(); resolve(false); };
+  });
+}
+function closeModal() { document.getElementById('confirmModal').classList.remove('show'); }
+
+init();
+</script>
+</body>
+</html>
